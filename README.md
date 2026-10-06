@@ -40,8 +40,7 @@ Developed with:
 ### iOS
 
 - Deployment target: iOS 26.0
-- iOS was not built locally because development was performed on Windows without access to macOS/Xcode.
-- The iOS project is included for evaluation and can be built on macOS.
+- The iOS build was not tested locally because development was performed on Windows without access to macOS/Xcode.
 
 ---
 
@@ -71,13 +70,13 @@ Wait until the Android emulator has fully started.
 
 Open a second PowerShell terminal in the project directory.
 
-You can verify that the emulator is available with:
+Verify the available devices:
 
 ```powershell
 flutter devices
 ```
 
-During local testing the emulator device ID was `emulator-5554`.
+During local testing, the emulator device ID was `emulator-5554`.
 
 Run:
 
@@ -121,23 +120,20 @@ build/app/outputs/flutter-apk/app-debug.apk
 
 ## Architecture
 
-The project follows a layered architecture with separation between **Data, Domain, and Presentation** responsibilities.
+The project follows a layered architecture with clear separation between **Data, Domain, and Presentation** responsibilities.
 
 ```text
 lib/
 ├── core/
 │   └── errors/
-│
 ├── data/
 │   ├── datasources/
 │   ├── dtos/
 │   └── repositories/
-│
 ├── domain/
 │   ├── models/
 │   ├── repositories/
 │   └── services/
-│
 └── presentation/
     ├── controllers/
     ├── providers/
@@ -163,14 +159,11 @@ Contains application models, repository abstractions, and business rules.
 
 Responsibilities include:
 
-- Character model.
-- Paginated character model.
+- Character and paginated character models.
 - Character height parsing.
-- Unknown/invalid height handling.
+- Unknown and invalid height handling.
 - Height-based sorting.
 - Repository interfaces.
-
-The domain layer determines how character heights are interpreted and how the final list is sorted.
 
 ### Presentation Layer
 
@@ -183,55 +176,41 @@ Contains:
 
 Business state is managed outside the widgets.
 
-Dart 3 sealed classes are used to represent application states and failures, and pattern matching is used when handling/rendering those states.
+Dart 3 sealed classes are used to represent application states and failures, and pattern matching is used when handling and rendering those states.
 
 ---
 
 ## State Management — Riverpod 3
 
-**Riverpod 3** was chosen for state management and dependency injection.
-
-It provides:
-
-- Predictable state updates.
-- Explicit dependency injection.
-- Easy replacement of dependencies with fakes during tests.
-- Separation between UI and business logic.
-- No need for global mutable singletons.
+**Riverpod 3** was chosen for state management and dependency injection because it provides predictable state updates, explicit dependency injection, testability, and clear separation between business logic and UI.
 
 The screen renders application state exposed by the controller.
 
 `setState` is not used for business state. Widget-local objects such as `ScrollController` and `TextEditingController` remain presentation concerns.
 
+Dependencies are provided through Riverpod and can be replaced with fake implementations during testing.
+
 ---
 
 ## Pagination
 
-The application loads the first SWAPI people page when it starts.
+The application loads the first SWAPI people page on launch.
 
-While the user scrolls toward the bottom, the application requests the next page and appends the new characters.
+When the user approaches the bottom of the list, the next page is loaded and appended to the existing characters.
 
-The application **always follows the exact `next` URL returned by SWAPI**.
+The application **always follows the exact `next` URL returned by SWAPI** and never constructs page URLs manually.
 
-Page URLs are never manually constructed.
+Previously requested URLs are tracked to prevent duplicate page requests.
 
-Previously requested URLs are tracked to prevent the same page from being requested twice.
-
-When:
-
-```text
-next == null
-```
-
-pagination stops and the complete list is sorted by height.
+When `next` becomes `null`, pagination stops and the complete collection is sorted by height.
 
 ---
 
-## Character Heights
+## Character Heights & Sorting
 
-SWAPI returns character height as a string.
+SWAPI represents character height as a string.
 
-Numeric heights are safely parsed and used both for display and for the logical height of the row.
+Numeric heights are safely parsed and used both for display and for the logical height of each row.
 
 Examples:
 
@@ -248,18 +227,9 @@ If the API returns `"unknown"`, `"none"`, or another invalid height value:
 - The row uses a fixed height of 80 logical pixels.
 - The application does not crash.
 
----
-
-## Sorting
-
 Characters remain in the original server order while additional pages are available.
 
-The application does **not** continuously sort partially loaded data.
-
-Only after the final page has been loaded is the entire collection sorted:
-
-1. Numeric heights from shortest to tallest.
-2. Unknown heights last.
+Only after the final page has been loaded is the complete collection sorted from shortest to tallest, with unknown heights placed last.
 
 ---
 
@@ -273,16 +243,11 @@ Behavior:
 - Tap another character -> it replaces the previous favorite.
 - Tap the current favorite again -> the favorite is cleared.
 
-The favorite is identified using the character's SWAPI `url` rather than its current list index.
+The favorite is identified using the character's SWAPI `url`, rather than its current position in the list.
 
-This allows the favorite to remain associated with the correct character after:
+This keeps the favorite associated with the correct character after pagination, sorting, searching, and application restarts.
 
-- Pagination.
-- Sorting.
-- Searching.
-- Application restart.
-
-The favorite URL is persisted locally using `shared_preferences` and restored when the application is started again.
+The favorite URL is persisted locally using `shared_preferences` and restored before the character list is displayed.
 
 If no favorite has previously been saved, the application starts with no selected favorite.
 
@@ -290,9 +255,7 @@ If no favorite has previously been saved, the application starts with no selecte
 
 ## Loading & Error Handling
 
-The application represents loading and failure conditions explicitly.
-
-Supported states include:
+The application explicitly handles:
 
 - Initial loading.
 - Initial loading failure.
@@ -302,18 +265,11 @@ Supported states include:
 - Search loading.
 - Search failure.
 
-When loading another page, the already-loaded list remains available and scrollable.
+When another page is loading, the already-loaded list remains available and scrollable.
 
 If loading a subsequent page fails, existing characters are preserved and the failed request can be retried.
 
-The application uses typed failures for:
-
-- Network errors.
-- Timeouts.
-- Server errors.
-- Invalid data.
-- Cancelled requests.
-- Persistence failures.
+The application uses typed failures for network, timeout, server, data, cancellation, and persistence errors.
 
 HTTP requests use configured timeouts.
 
@@ -343,28 +299,20 @@ Pagination continues to follow the URL supplied by the API rather than generatin
 
 The bonus search functionality is implemented.
 
-Search uses SWAPI's server-side search endpoint rather than filtering the already-loaded characters locally.
+Search uses SWAPI's server-side `?search=` endpoint rather than filtering already-loaded characters locally.
 
-Example:
-
-```text
-GET /api/people/?search=Luke
-```
-
-Implemented search behavior:
+Implemented behavior:
 
 - Server-side search.
 - Approximately 300 ms debounce.
-- Protection against stale search responses.
-- Cancellation/ignoring of superseded requests.
+- Cancellation or ignoring of stale search requests.
 - Paginated search results.
 - Infinite scrolling within search results.
-- Loading states.
-- Error handling.
+- Loading and error states.
 - Empty-result state.
-- Favorite selection in search results.
-- Sorting after the final search page.
-- Clearing the search restores the already-loaded main list without refetching it.
+- Favorite selection within search results.
+- Height sorting after the final search page.
+- Clearing the search restores the already-loaded main collection without refetching it.
 
 ---
 
@@ -372,16 +320,11 @@ Implemented search behavior:
 
 The application uses Material 3 components and is designed for:
 
-- Android.
-- iOS.
-- Phones.
-- Tablets.
-- Portrait orientation.
-- Landscape orientation.
+- Android and iOS.
+- Phones and tablets.
+- Portrait and landscape orientations.
 
-Application state is managed outside the screen widget, so rebuilding the interface after an orientation change does not discard the loaded character data, favorite, or search term.
-
-The scroll controller remains associated with the screen state during orientation changes to preserve the scrolling context.
+Application state is managed outside the screen widget so that orientation changes retain the loaded pages, favorite, search term, and scroll position.
 
 ---
 
@@ -394,15 +337,14 @@ The scroll controller remains associated with the screen state during orientatio
 - **DONE** — Page 1 loads on launch.
 - **DONE** — Server order is preserved while pagination is active.
 - **DONE** — The next page loads near the bottom of the list.
-- **DONE** — New characters are appended to existing characters.
+- **DONE** — New characters are appended to the existing list.
 - **DONE** — The exact server-provided `next` URL is followed.
 - **DONE** — Duplicate page requests are prevented.
 - **DONE** — Pagination stops when `next` is null.
 
 ### F2 — Character Row — DONE
 
-- **DONE** — Character name is displayed.
-- **DONE** — Character height is displayed.
+- **DONE** — Character name and height are displayed.
 - **DONE** — Row logical height corresponds to numeric character height.
 - **DONE** — Unknown/invalid heights display `unknown`.
 - **DONE** — Unknown heights use an 80 px row.
@@ -413,7 +355,7 @@ The scroll controller remains associated with the screen state during orientatio
 - **DONE** — Initial loading state.
 - **DONE** — Pagination loading state.
 - **DONE** — Existing content remains available during pagination.
-- **DONE** — Typed error states.
+- **DONE** — Typed error handling.
 - **DONE** — Retry behavior for failed requests.
 - **DONE** — Already-loaded data is preserved after pagination failure.
 
@@ -443,8 +385,10 @@ The scroll controller remains associated with the screen state during orientatio
 - **DONE** — Portrait orientation.
 - **DONE** — Landscape orientation.
 - **DONE** — Material 3 UI.
-- **DONE** — Loaded application state is retained during orientation changes.
-- **DONE** — Favorite and search state are retained during orientation changes.
+- **DONE** — Loaded pages are retained during orientation changes.
+- **DONE** — Scroll position is retained during orientation changes.
+- **DONE** — Favorite is retained during orientation changes.
+- **DONE** — Search term is retained during orientation changes.
 
 ---
 
@@ -457,52 +401,49 @@ The scroll controller remains associated with the screen state during orientatio
 - **DONE** — Sound null safety.
 - **DONE** — `flutter_lints`.
 - **DONE** — Dart 3 sealed classes.
-- **DONE** — Pattern matching for application state/errors.
+- **DONE** — Pattern matching for application state and errors.
 - **DONE** — `flutter analyze` passes with no issues.
 
 ### T2 — State Management — DONE
 
 - **DONE** — Riverpod 3.
-- **DONE** — Application state represented by an immutable state model.
+- **DONE** — Screen renders an immutable application state model.
 - **DONE** — No `setState` for business state.
 - **DONE** — No global mutable singletons.
-- **DONE** — Dependencies provided through Riverpod.
+- **DONE** — Dependencies are provided through Riverpod.
 
 ### T3 — Layers — DONE
 
 - **DONE** — Data layer.
 - **DONE** — Domain layer.
 - **DONE** — Presentation layer.
-- **DONE** — HTTP logic separated from widgets.
-- **DONE** — DTOs separated from domain models.
+- **DONE** — HTTP logic is separated from widgets.
+- **DONE** — DTOs are separated from domain models.
 - **DONE** — Widgets never parse JSON.
 - **DONE** — API dependency is injected and replaceable with a fake during tests.
 
 ### T4 — Async — DONE
 
-- **DONE** — Dio used for HTTP requests.
-- **DONE** — Request timeouts.
+- **DONE** — Dio is used for HTTP requests.
+- **DONE** — Request timeouts are configured.
 - **DONE** — Typed application errors.
 - **DONE** — Stale search requests are cancelled or ignored.
-- **DONE** — Network work is asynchronous and does not perform blocking work on the UI thread.
+- **DONE** — Network operations are asynchronous and do not block the UI thread.
 
 ### T5 — Persistence — DONE
 
-- **DONE** — `shared_preferences` used for favorite persistence.
-- **DONE** — Favorite stored using character URL.
-- **DONE** — Stored favorite restored on application startup.
+- **DONE** — `shared_preferences` is used for favorite persistence.
+- **DONE** — Favorite is stored using the character URL.
+- **DONE** — Stored favorite is restored before the character list is displayed.
 
 ### T6 — Tests — DONE
 
 - **DONE** — Height parsing tests.
 - **DONE** — Unknown/invalid height tests.
-- **DONE** — Sorting tests.
-- **DONE** — Unknown-height sorting tests.
-- **DONE** — Pagination tests using a fake repository/API boundary.
-- **DONE** — Duplicate concurrent page request protection tested.
+- **DONE** — Sorting tests including unknown heights.
+- **DONE** — Pagination logic tests using a fake repository/API boundary.
+- **DONE** — Duplicate concurrent page request protection is tested.
 - **DONE** — All automated tests pass.
-
-Submission validation:
 
 ```text
 flutter test
@@ -521,7 +462,7 @@ Android:
 iOS:
 
 - **DONE** — Deployment target configured to iOS 26.0.
-- iOS build was not locally verified because development was performed on Windows without macOS/Xcode.
+- The iOS build was not tested locally because development was performed on Windows without access to macOS/Xcode.
 
 ---
 
@@ -544,39 +485,16 @@ iOS:
 
 ## Tests & Validation
 
-Before submission, the following commands were run successfully:
+The following validation was completed successfully before submission:
 
-```powershell
+```text
 flutter analyze
-```
-
-Result:
-
-```text
 No issues found!
-```
 
-Tests:
-
-```powershell
 flutter test
-```
-
-Result:
-
-```text
 +11: All tests passed!
-```
 
-Android build:
-
-```powershell
 flutter build apk --debug
-```
-
-Result:
-
-```text
 Built build/app/outputs/flutter-apk/app-debug.apk
 ```
 
@@ -584,44 +502,25 @@ Built build/app/outputs/flutter-apk/app-debug.apk
 
 ## Packages Used
 
-### flutter_riverpod
-
-Used for application state management and dependency injection.
-
-### dio
-
-Used for HTTP communication, request timeouts, and request cancellation.
-
-### shared_preferences
-
-Used to persist the selected favorite character URL locally.
-
-### flutter_lints
-
-Used for Flutter/Dart static analysis and lint rules.
+- `flutter_riverpod` — state management and dependency injection.
+- `dio` — HTTP communication, timeouts, and request cancellation.
+- `shared_preferences` — local favorite persistence.
+- `flutter_lints` — static analysis and lint rules.
 
 ---
 
 ## AI Tools
 
-**ChatGPT** was used during development for assistance with:
-
-- Implementation planning.
-- Architecture review.
-- Debugging.
-- Code review.
-- Test planning.
-
-The submitted project was validated using Flutter static analysis, automated tests, and an Android debug build.
+ChatGPT was used as an AI development assistant.
 
 ---
 
 ## Known Issues / Environment Notes
 
-Development and local testing were performed on **Windows**.
+Development and testing were performed on **Windows**.
 
-Android static analysis, automated tests, and the Android debug APK build were successfully verified before submission.
+Android static analysis, automated tests, and the Android debug build were successfully verified.
 
-The iOS deployment target is configured to **iOS 26.0**, but the iOS application was not built locally because macOS/Xcode was not available. The iOS project is included so it can be built and evaluated on macOS.
+The iOS deployment target is configured to **iOS 26.0**. The iOS build was not tested locally because macOS/Xcode was not available.
 
-The public SWAPI service may occasionally respond slowly or be temporarily unavailable. The application therefore includes loading states, request timeouts, typed error handling, retry behavior, and the provided fallback API.
+SWAPI may occasionally respond slowly or be temporarily unavailable. The application includes loading states, request timeouts, typed error handling, retry behavior, and the provided fallback API.
